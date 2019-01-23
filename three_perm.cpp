@@ -90,11 +90,11 @@ int three_perm::LegalActions(point p, vector<point> &legal_actions, int n) {
 bool three_perm::TestResultIsSatisfied(int target_energy, int length) {
 	int result = 0;
 	for (size_t i = 0; i < length; i++) {
-		point p = lowest_configurations_point[i];
-		char type = lowest_configurations_class[i];
+		point p = configurations_point[i];
+		char type = configurations_class[i];
 		for (size_t j = i + 2; j < length; j++) {
-			point _p = lowest_configurations_point[j];
-			char _type = lowest_configurations_class[j];
+			point _p = configurations_point[j];
+			char _type = configurations_class[j];
 			if (type == _type && type == 'H') {
 				float _result = DistenceBetweenPoints(p, _p);
 				if (DistenceBetweenPoints(p, _p) == 1) {
@@ -146,6 +146,8 @@ void three_perm::InitConfig(string &input, point &p, double &weight) {
 
 //算法
 void three_perm::StartCalculate(string input) {
+	//初始化
+	perm_lowest_energy = 0;
 	int tag_i = 0;
 	point p_second;
 	double start_weigtht;
@@ -154,12 +156,20 @@ void three_perm::StartCalculate(string input) {
 	char type_before[perm::max_size_of_input];
 	InitConfig(input, p_second, start_weigtht);
 	CircleCalculate(3, input.size(), p_second, start_weigtht, input);
+	if (TestResultIsSatisfied(present_energy, input.length())) {
+		cout << "test satisfied!" << endl;
+	}
+	else {
+		cout << "error TAT" << endl;
+	}
 }
 
 //迭代过程
 void three_perm::CircleCalculate(int n, int whole_length, point p_before, double weight, string input) {
 	//结束条件判断
 	if (n > whole_length) {
+		cout << present_energy << endl;
+		cout << present_energy << endl;
 		return;
 	}
 	//获取当前状态可行的动作
@@ -201,6 +211,12 @@ void three_perm::CircleCalculate(int n, int whole_length, point p_before, double
 			best_index = i;
 			_energy_increase = energy_increase;
 			_present_weight = present_weight;
+			min_energy = _perm.GetEnergy();
+			if (_perm.GetEnergy() < perm_lowest_energy) {
+				perm_lowest_energy = _perm.GetEnergy();
+				_perm.GetPoint(perm_lowest_configurations_class);
+				_perm.GetPointPosition(perm_lowest_configurations_point);
+			}			
 			//min_energy = _perm.GetEnergy();
 			//_perm.GetPointPosition(best_point);
 			//_perm.GetPoint(best_type);

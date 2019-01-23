@@ -68,7 +68,7 @@ private:
 
 public:
 	//获取能量值
-	int GetEnergy() { return present_energy; }
+	int GetEnergy() { return lowest_energy; }
 	//获取最低能量构型点坐标
 	void GetPointPosition(point points[max_size_of_input]);
 	//获取最低能量构型点类型

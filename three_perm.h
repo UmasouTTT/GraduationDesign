@@ -28,6 +28,12 @@ private:
 	point lowest_configurations_point[perm::max_size_of_input];
 	char lowest_configurations_class[perm::max_size_of_input];
 
+	//perm最低能量
+	int perm_lowest_energy = 0;
+	//perm最低能量构型
+	point perm_lowest_configurations_point[perm::max_size_of_input];
+	char perm_lowest_configurations_class[perm::max_size_of_input];
+
 private:
 	//求小值
 	template <typename T>
