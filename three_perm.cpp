@@ -124,11 +124,11 @@ void three_perm::InitConfig(string &input, point &p, double &weight) {
 	weight = 1;
 	//权重算术平均值(需要初始化)
 	for (size_t i = 0; i < input.length(); i++) {
-		average_weights[i] = 1;
+		average_weights[i] = 0;
 	}
 	//长度为n的构型的数量(需要初始化)
 	for (size_t i = 0; i < input.length(); i++) {
-		weights_numbers[i] = 1;
+		weights_numbers[i] = 0;
 	}
 	//各分支具体构型
 	point p1;
@@ -168,8 +168,10 @@ void three_perm::StartCalculate(string input) {
 void three_perm::CircleCalculate(int n, int whole_length, point p_before, double weight, string input) {
 	//结束条件判断
 	if (n > whole_length) {
+		cout << "circle end, present energy :";
 		cout << present_energy << endl;
-		cout << present_energy << endl;
+		cout << "circle end, history energy :";
+		cout << perm_lowest_energy << endl;
 		return;
 	}
 	//获取当前状态可行的动作
@@ -185,6 +187,12 @@ void three_perm::CircleCalculate(int n, int whole_length, point p_before, double
 	int best_index = -1;
 	int _energy_increase;
 	double _present_weight;
+	//考虑两条支线找到的最小值相等的情况
+	int num_of_lowestConfig = 0;
+	//记录之前迭代的权重的均值
+	double branch_before_average_weight[perm::max_size_of_input];
+	//长度为n的构型的数量(需要初始化)
+	double branch_before_weights_numbers[perm::max_size_of_input];
 	//分别计算出各可行动作在perm算法下的值，并且取能量最低的
 	for (size_t i = 0; i < k_free; i++) {
 		perm _perm;
@@ -200,38 +208,78 @@ void three_perm::CircleCalculate(int n, int whole_length, point p_before, double
 		char temp_configurations_class[perm::max_size_of_input];
 		//更新
 		UpdateTempVariables(temp_average_weights, temp_weights_numbers, temp_configurations_point, temp_configurations_class, present_weight, n, legal_actions[i], input[n - 1], energy_increase);
-		//设置perm参数
+		/*//设置perm参数
 		_perm.SetAverageWeight(temp_average_weights);
 		_perm.SetEnergy(present_energy + energy_increase);
 		_perm.SetPointPosition(temp_configurations_point);
 		_perm.SetPoint(temp_configurations_class);
-		_perm.SetThisWeightNumber(temp_weights_numbers);
-		_perm.CalculationProcess(n + 1, whole_length, 0, legal_actions[i], present_weight, input);
+		_perm.SetThisWeightNumber(temp_weights_numbers);*/
+		//_perm.CalculationProcess(n + 1, whole_length, 0, legal_actions[i], present_weight, input);
+		//根据进度选择迭代次数，初始时迭代次数多，越往后越少
+		int circle_times = 10;
+		if (n / whole_length < 0.3) {
+			circle_times = 30;
+			_perm.SetPopulation(10000);
+		}
+		else if (n / whole_length < 0.7) {
+			circle_times = 20;
+		}
+		else {
+			circle_times = 10;
+			_perm.SetPopulation(10000);
+		}
+		_perm.CircleCalculateProcess(n + 1, whole_length, legal_actions[i], present_weight, input, circle_times, temp_average_weights, present_energy + energy_increase, temp_configurations_point, temp_configurations_class, temp_weights_numbers);
+		//如果当前分支所找到的最小能量比之前的都小，则将该分支选为最优分支
 		if (_perm.GetEnergy() < min_energy) {
 			best_index = i;
+			num_of_lowestConfig = _perm.GetNumOfLowestConfigurations();
 			_energy_increase = energy_increase;
 			_present_weight = present_weight;
 			min_energy = _perm.GetEnergy();
+			_perm.GetAverageWeight(branch_before_average_weight);
+			_perm.GetThisWeightNumber(branch_before_weights_numbers);
 			if (_perm.GetEnergy() < perm_lowest_energy) {
 				perm_lowest_energy = _perm.GetEnergy();
 				_perm.GetPoint(perm_lowest_configurations_class);
 				_perm.GetPointPosition(perm_lowest_configurations_point);
-			}			
-			//min_energy = _perm.GetEnergy();
-			//_perm.GetPointPosition(best_point);
-			//_perm.GetPoint(best_type);
+			}						
+		}
+		//如果两分支所找到的最小能量一致，则将最小构型数量多的设置为最优分支，若数量一致，则随机选
+		else if (_perm.GetEnergy() == min_energy) {
+			int present_num_of_config = _perm.GetNumOfLowestConfigurations();
+			if (present_num_of_config > num_of_lowestConfig) {
+				best_index = i;
+				num_of_lowestConfig = present_num_of_config;
+				_energy_increase = energy_increase;
+				_present_weight = present_weight;
+				min_energy = _perm.GetEnergy();
+				_perm.GetAverageWeight(branch_before_average_weight);
+				_perm.GetThisWeightNumber(branch_before_weights_numbers);
+			}
+			else if (present_num_of_config == num_of_lowestConfig) {
+				int _randnum = random(0, 10);
+				if (_randnum < 5) {
+					best_index = i;
+					num_of_lowestConfig = present_num_of_config;
+					_energy_increase = energy_increase;
+					_present_weight = present_weight;
+					min_energy = _perm.GetEnergy();
+					_perm.GetAverageWeight(branch_before_average_weight);
+					_perm.GetThisWeightNumber(branch_before_weights_numbers);
+				}
+			}
 		}
 	}	
 	//根据选择的情况进行更新
-	UpdateGlobalVariables(_present_weight, n, legal_actions[best_index], 0, input[n - 1], _energy_increase);
+	UpdateGlobalVariables(_present_weight, n, legal_actions[best_index], 0, input[n - 1], _energy_increase, branch_before_average_weight, branch_before_weights_numbers);
 	CircleCalculate(n + 1, whole_length, legal_actions[best_index], _present_weight, input);
 
 }
 
 
-void  three_perm::UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase) {
+void  three_perm::UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase, double _average_weights[], double _weights_numbers[]) {
 	//更新权重算术平均值及该种构型长度的数量
-	UpdateAverageWeight(weight, n);
+	UpdateAverageWeightByThree(weight, n, _average_weights, _weights_numbers);
 	//更新各分支具体构型
 	configurations_point[n - 1] = p;
 	configurations_class[n - 1] = type;
@@ -240,10 +288,13 @@ void  three_perm::UpdateGlobalVariables(double weight, int n, point p, int tag, 
 }
 
 //更新Cn,Zn
-void three_perm::UpdateAverageWeight(double w, int n) {
-	double average_weight_before = average_weights[n - 1] * weights_numbers[n - 1];
-	++weights_numbers[n - 1];
-	average_weights[n - 1] = (average_weight_before + w) / weights_numbers[n - 1];
+void three_perm::UpdateAverageWeightByThree(double w, int n, double _average_weights[], double _weights_numbers[]) {
+	for (size_t i = 0; i < n; i++){
+		double _present_weight = average_weights[i] * weights_numbers[i];
+		double _new_weight = _average_weights[i] * _weights_numbers[i];
+		average_weights[i] = (_present_weight + _new_weight) / (weights_numbers[i] + _weights_numbers[i]);
+		weights_numbers[i] = weights_numbers[i] + _weights_numbers[i];
+	}
 }
 
 

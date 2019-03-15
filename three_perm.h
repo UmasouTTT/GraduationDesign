@@ -65,9 +65,9 @@ private:
 	//迭代过程
 	void CircleCalculate(int n, int whole_length, point p_before, double weight, string input);
 	//根据选择的更新全局变量
-	void  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase);
+	void  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase, double _average_weights[], double _weights_numbers[]);
 	//更新Cn,Zn
-	void UpdateAverageWeight(double w, int n);
+	void UpdateAverageWeightByThree(double w, int n, double _average_weights[], double _weights_numbers[]);
 	//计算权重
 	double CalculateWeight(double w, int energy_increase);
 	//计算能量增量

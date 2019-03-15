@@ -6,13 +6,15 @@ const int perm::max_size_of_input;
 const int perm::max_size_of_legal_input;
 const int perm::max_size_of_possibleConditions;
 
-const double perm::T = 0.25;
-const double perm::C0 = 1000;
+const double perm::T = 0.35;
+//const double perm::C0 = 10000;
 const int perm::Z0 = 1;
 const int perm::C = 1;
+const double perm::MAX_DOUBLE = 1.7976931348623158e+308;
 
 perm::perm()
 {
+	C0 = 10000;
 }
 
 
@@ -46,6 +48,15 @@ void perm::SetAverageWeight(double _average_weights[max_size_of_input]) {
 //设置长度为n的构型的数量
 void perm::SetThisWeightNumber(double _weights_numbers[max_size_of_input]) {
 	ArrayAssignment(weights_numbers, _weights_numbers, max_size_of_input);
+}
+
+//获取权重算术平均值
+void perm::GetAverageWeight(double _average_weights[max_size_of_input]) {
+	ArrayAssignment(_average_weights, average_weights, max_size_of_input);
+}
+//获取长度为n的构型的数量
+void perm::GetThisWeightNumber(double _weights_numbers[max_size_of_input]) {
+	ArrayAssignment(_weights_numbers, weights_numbers, max_size_of_input);
 }
 
 
@@ -420,11 +431,20 @@ bool perm::TestResultIsSatisfied(int target_energy, int length) {
 void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, double weight, string input) {
 	//结束条件判断
 	if (n > whole_length) {
-		if (present_energy <= lowest_energy) {
+		if (present_energy < lowest_energy) {
+			num_of_lowestConfigurations = 1;
+			cout << "find lower energy configuration, present energy is:";
 			cout << present_energy << endl;
 			lowest_energy = present_energy;
 			ArrayAssignment(lowest_configurations_point, configurations_point, max_size_of_input);
 			ArrayAssignment(lowest_configurations_class, configurations_class, max_size_of_input);
+		}
+		else if (present_energy == lowest_energy) {
+			++num_of_lowestConfigurations;
+			cout << "find new configuration :" ;
+			cout << num_of_lowestConfigurations ;
+			cout << "  present energy is :";
+			cout << present_energy << endl;
 		}
 		return;
 	}
@@ -442,11 +462,16 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 	//计算各个动作的好度与权重预测值
 	double predict_wigtht = CalculatePredictWeight(weight, p_before, input[n - 1], good_degrees, n, whole_length, k_free, legal_actions, energy_increase);
 	//计算上下门限
-	double upper_threshold = CalculateUpperThreshold(n);
-	double lower_threshold = CalculateLowerThreshold(upper_threshold);
-	if (upper_threshold <= lower_threshold) {
-		int not_ok = 1;
+	double upper_threshold;
+	double lower_threshold;
+	if (weights_numbers[n - 1] == 0) {
+		upper_threshold = predict_wigtht + 1;
+		lower_threshold = 0;
 	}
+	else {
+		upper_threshold = CalculateUpperThreshold(n);
+		lower_threshold = CalculateLowerThreshold(upper_threshold);
+	} 
 	//根据预测值与上下门限的数值关系分类讨论
 	if (predict_wigtht >= lower_threshold && predict_wigtht <= upper_threshold) {
 		//根据好度概率选择下一动作
@@ -510,19 +535,19 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 }
 
 //初始化（初始化变元，前两个值为定值）
-void perm::InitConfig(string &input, point &p, double &weight) {
+void perm::InitConfig(string &input, point &p, double &weight, int tag) {
 	//清空数据
 	//free(present_energy);
 	//present_energy = (int *)malloc(sizeof(int));
 	max_tag = 0;
 	weight = 1;
-	//权重算术平均值(需要初始化)
+	//权重算术平均值(第一次迭代时获取初始值需要初始化)
 	for (size_t i = 0; i < input.length(); i++) {
-		average_weights[i] = 1;
+		average_weights[i] = 0;
 	}
 	//长度为n的构型的数量(需要初始化)
 	for (size_t i = 0; i < input.length(); i++) {
-		weights_numbers[i] = 1;
+		weights_numbers[i] = 0;
 	}
 	//各分支具体构型
 	point p1;
@@ -536,6 +561,20 @@ void perm::InitConfig(string &input, point &p, double &weight) {
 	configurations_class[1] = input[1];
 	//各分支当前构型能量
 	present_energy = 0;
+	//初始化权重
+	CalculationProcess(3, input.length(), 0, p, weight, input);
+	if (TestResultIsSatisfied(lowest_energy, input.length())) {
+		cout << "test satisfied!" << endl;
+	}
+	else {
+		cout << "something wrongQAQ~" << endl;
+	}
+	//重置其他数据
+	max_tag = 0;
+	weight = 1;
+	//各分支当前构型能量
+	present_energy = 0;
+
 }
 
 
@@ -564,6 +603,9 @@ void perm::StartCalculate(string input, int num_of_circle) {
 	int result_energy_low = 0;
 	point point_before[max_size_of_input];
 	char type_before[max_size_of_input];
+	//获取最低能量的最多构型数
+	num_of_lowestConfigurations = 0;
+	int temp_lowestConfig = 0;
 	//获取时间
 	/*struct tm t;   //tm结构指针
 	time_t now;  //声明time_t类型变量
@@ -572,7 +614,7 @@ void perm::StartCalculate(string input, int num_of_circle) {
 	strftime(ch1, sizeof(ch1) - 1, "%Y-%m-%d %H:%M:%S", localtime_s(&t, &now));*/
 	//cout << ch1 << endl;
 	while (tag_i < num_of_circle) {
-		InitConfig(input, p_second, start_weigtht);
+		InitConfig(input, p_second, start_weigtht, tag_i);
 		CalculationProcess(3, input.length(), 0, p_second, start_weigtht, input);
 		if (TestResultIsSatisfied(lowest_energy, input.length())) {
 			cout << "test satisfied!" << endl;
@@ -583,11 +625,84 @@ void perm::StartCalculate(string input, int num_of_circle) {
 		if (lowest_energy < result_energy_low) {
 			result_energy_low = lowest_energy;
 			cout << "lowest energy: " << result_energy_low << "length of config : " << input.length() << endl;
+			temp_lowestConfig = num_of_lowestConfigurations;
+			num_of_lowestConfigurations = 1;
+		}
+		else if (lowest_energy == result_energy_low) {
+			if (num_of_lowestConfigurations > temp_lowestConfig) {
+				temp_lowestConfig = num_of_lowestConfigurations;
+			}
+			num_of_lowestConfigurations = 1;
 		}
 		/*t = time(NULL);
 		char ch[64] = { 0 };
 		strftime(ch, sizeof(ch) - 1, "%Y-%m-%d %H:%M:%S", localtime(&t));*/
 		//cout << ch << endl;
 		++tag_i;
+	}
+	num_of_lowestConfigurations = temp_lowestConfig;
+}
+
+
+//多次计算各分支情况
+void perm::CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]){
+	//初始化局部变量
+	int tag_i = 0;
+	int result_energy_low = 0;	
+	num_of_lowestConfigurations = 0;
+	int temp_lowestConfig = 0;
+	//循环体
+	while (tag_i < cirlce_times) {
+		//设置perm参数
+		//第一次迭代时设置权重初始值
+		InitStartAverageWeight(n, whole_length, p_before, weight, input, _average_weights, _energy, points, _points, _weights_numbers);
+		SetEnergy(_energy);
+		SetPointPosition(points);
+		SetPoint(_points);		
+		CalculationProcess(n, input.length(), 0, p_before, weight, input);
+		if (TestResultIsSatisfied(lowest_energy, input.length())) {
+			cout << "test satisfied!" << endl;
+		}
+		else {
+			cout << "something wrongQAQ~" << endl;
+		}
+		if (lowest_energy < result_energy_low) {
+			result_energy_low = lowest_energy;
+			cout << "lowest energy: " << result_energy_low << "length of config : " << input.length() << endl;
+			temp_lowestConfig = num_of_lowestConfigurations;
+			num_of_lowestConfigurations = 1;
+		}
+		else if (lowest_energy == result_energy_low) {
+			if (num_of_lowestConfigurations > temp_lowestConfig) {
+				temp_lowestConfig = num_of_lowestConfigurations;
+			}
+			num_of_lowestConfigurations = 1;
+		}
+		//选择最多能量构型数
+	
+		/*t = time(NULL);
+		char ch[64] = { 0 };
+		strftime(ch, sizeof(ch) - 1, "%Y-%m-%d %H:%M:%S", localtime(&t));*/
+		//cout << ch << endl;
+		++tag_i;
+	}
+	num_of_lowestConfigurations = temp_lowestConfig;
+}
+
+
+
+//初始化起始权重
+void perm::InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]) {
+	SetAverageWeight(_average_weights);
+	SetThisWeightNumber(_weights_numbers);
+	SetEnergy(_energy);
+	SetPointPosition(points);
+	SetPoint(_points);
+	CalculationProcess(n, input.length(), 0, p_before, weight, input);
+	if (TestResultIsSatisfied(lowest_energy, input.length())) {
+		cout << "test satisfied!" << endl;
+	}
+	else {
+		cout << "something wrongQAQ~" << endl;
 	}
 }

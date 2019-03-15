@@ -37,11 +37,14 @@ public:
 	static const int max_size_of_legal_input = 4;//每个点的最多合法方向
 	static const int max_size_of_possibleConditions = 24;//
 	static const double T;
-	static const double C0;
+	//static const double C0;
 	static const int Z0;
 	static const int C;
+	static const double MAX_DOUBLE;
 
 private:
+	//用于控制人口
+	double C0;
 	//当前最大分支标识号
 	int max_tag = 0;
 	//权重算术平均值(需要初始化)
@@ -65,6 +68,8 @@ private:
 	vector<int> input_numbers;
 	vector<int> combination_one;
 	vector<vector<int>> combination_result;
+	//最低能量构型数量
+	int num_of_lowestConfigurations;
 
 public:
 	//获取能量值
@@ -83,6 +88,14 @@ public:
 	void SetAverageWeight(double _average_weights[max_size_of_input]);
 	//设置长度为n的构型的数量
 	void SetThisWeightNumber(double _weights_numbers[max_size_of_input]);
+	//获取权重算术平均值
+	void GetAverageWeight(double _average_weights[max_size_of_input]);
+	//获取长度为n的构型的数量
+	void GetThisWeightNumber(double _weights_numbers[max_size_of_input]);
+	//获取最低构型数
+	int GetNumOfLowestConfigurations() { return num_of_lowestConfigurations; }
+	//设置人口繁衍情况
+	void SetPopulation(double _C0) { C0 = _C0; }
 
 private:
 	//求小值
@@ -141,16 +154,20 @@ private:
 	//测试运算结果是否正确
 	bool TestResultIsSatisfied(int target_energy, int length);	
 	//初始化（初始化变元，前两个值为定值）
-	void InitConfig(string &input, point &p, double &weight);
+	void InitConfig(string &input, point &p, double &weight, int tag);
 	//计算最大长度
 	void CalculateMaxSize(int length);
 	//初始化全局变元
 	void InitGlobalVariable(string input);
+	//生成初始权重
+	void InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]);
 
 public:
 	//迭代算法
 	void StartCalculate(string input, int num_of_circle);
 	//迭代计算各分支情况
 	void CalculationProcess(int n, int whole_length, int tag, point p_before, double weight, string input);
+	//多次计算各分支情况
+	void CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]);
 };
 
