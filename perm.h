@@ -1,5 +1,4 @@
 #pragma once
-#include "stdafx.h"
 #include<stdlib.h>
 #include<map>
 #include<unordered_map>
@@ -31,45 +30,61 @@ class perm
 {
 public:
 	perm();
+	perm(int predict_energy);
+	perm(int predict_energy, bool isSoultionSaved);
 	~perm();
 
 	static const int max_size_of_input = 100;//最长链长
 	static const int max_size_of_legal_input = 4;//每个点的最多合法方向
 	static const int max_size_of_possibleConditions = 24;//
 	static const double T;
-	//static const double C0;
+	static const double C0;
 	static const int Z0;
 	static const int C;
-	static const double MAX_DOUBLE;
+	static const float part_config_for_save;//初始迭代所保存构型比例
 
 private:
-	//用于控制人口
-	double C0;
 	//当前最大分支标识号
 	int max_tag = 0;
 	//权重算术平均值(需要初始化)
 	//double *average_weights = new double[max_size_of_input];
-	double average_weights[max_size_of_input];
+	double *average_weights; 
 	//长度为n的构型的数量(需要初始化)
 	//double *weights_numbers = new double[max_size_of_input];
-	double weights_numbers[max_size_of_input];
+	double *weights_numbers;
 	//各分支具体构型
-	point configurations_point[max_size_of_input];
-	char configurations_class[max_size_of_input];
+	point *configurations_point;
+	char *configurations_class;
 	//各分支当前构型能量
 	int present_energy;
 	//vector<int>present_energy;
 	//最低能量
 	int lowest_energy = 0;
 	//最低能量构型
-	point lowest_configurations_point[max_size_of_input];
-	char lowest_configurations_class[max_size_of_input];
+	point *lowest_configurations_point;
+	char *lowest_configurations_class;
 	//用于获取合法组合集合
 	vector<int> input_numbers;
 	vector<int> combination_one;
 	vector<vector<int>> combination_result;
 	//最低能量构型数量
 	int num_of_lowestConfigurations;
+	//默认最差构型能量，由第一次随机遍历产生
+	int worest_energy;
+	//定义Perm迭代出构型长度
+	int choose_config_length = 0;
+	//记录目前出现的最优构型
+	point **best_config_ever;
+	//记录目前最优构型数量
+	int best_config_num;
+	//生成初始权重
+	void InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, int _energy, point points[max_size_of_input], char _points[max_size_of_input]);
+	//用于记录开始进行剪枝时的链长
+	int beginPuningTheBranch;
+	//用于判定是否已经开始剪枝
+	bool isPuneBegin;
+	//用于判定是否需要记录最优解分支
+	bool isSolutionNeedToBeSaved;
 
 public:
 	//获取能量值
@@ -88,14 +103,16 @@ public:
 	void SetAverageWeight(double _average_weights[max_size_of_input]);
 	//设置长度为n的构型的数量
 	void SetThisWeightNumber(double _weights_numbers[max_size_of_input]);
-	//获取权重算术平均值
-	void GetAverageWeight(double _average_weights[max_size_of_input]);
-	//获取长度为n的构型的数量
-	void GetThisWeightNumber(double _weights_numbers[max_size_of_input]);
 	//获取最低构型数
 	int GetNumOfLowestConfigurations() { return num_of_lowestConfigurations; }
-	//设置人口繁衍情况
-	void SetPopulation(double _C0) { C0 = _C0; }
+	//获取最低可用构型数量
+	int GetNumOfLowestConfigAndCanUse() { return best_config_num; }
+	//获取当前最优局部构型
+	void GetCurrentOptimalLocalConfiguration(point _best_config_ever[100][perm::max_size_of_input], int num_of_best_config, int length);
+	//获取指定链长平均权重(for test)
+	double GetTargetLengthWeight(int _index) { return average_weights[_index - 1]; }
+	//获取开始剪枝时的链长
+	int GetTheLengthStartPuneing() { return beginPuningTheBranch; }
 
 private:
 	//求小值
@@ -153,14 +170,14 @@ private:
 	vector<point> ChooseActionsGroupByGoodDegrees(int k, vector<double> &good_degrees, point p_before);
 	//测试运算结果是否正确
 	bool TestResultIsSatisfied(int target_energy, int length);	
-	//初始化（初始化变元，前两个值为定值）
-	void InitConfig(string &input, point &p, double &weight, int tag);
+	//初始化（初始化变元，前两个值为定值,需要生成初始权重）
+	void InitConfig(string &input, point &p, double &weight);
+	//初始化（初始化变元，前两个值为定值，无需生成初始权重）
+	void InitConfigWithoutInitWeight(string &input, point &p, double &weight);
 	//计算最大长度
 	void CalculateMaxSize(int length);
 	//初始化全局变元
 	void InitGlobalVariable(string input);
-	//生成初始权重
-	void InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]);
 
 public:
 	//迭代算法
@@ -169,5 +186,13 @@ public:
 	void CalculationProcess(int n, int whole_length, int tag, point p_before, double weight, string input);
 	//多次计算各分支情况
 	void CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]);
+
+
+	//非算法部分功能
+private:
+	//向历史最优构型中添加新构型
+	void AddNewConfigToBestConfigEver(point points[max_size_of_input], int length);
+	//判断两种构型是否可以认为一致（目前认为两种构型保持在所选链长一致即认为两种构型一致）
+	bool IsTwoConfigTheSame(point points[max_size_of_input], point _points[max_size_of_input], int start, int end);
 };
 

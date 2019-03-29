@@ -14,12 +14,13 @@ public:
 
 
 private:
+	//长度为n的构型的历史平均权重(需要初始化)
 	double average_weights[perm::max_size_of_input];
 	//长度为n的构型的数量(需要初始化)
 	double weights_numbers[perm::max_size_of_input];
 	//各分支具体构型
-	point configurations_point[perm::max_size_of_input];
-	char configurations_class[perm::max_size_of_input];
+	point configurations_point_three[perm::max_size_of_input];
+	char configurations_class_three[perm::max_size_of_input];
 	//当前构型能量
 	int present_energy;
 	//最低能量
@@ -65,17 +66,21 @@ private:
 	//迭代过程
 	void CircleCalculate(int n, int whole_length, point p_before, double weight, string input);
 	//根据选择的更新全局变量
-	void  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase, double _average_weights[], double _weights_numbers[]);
+	void  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase);
 	//更新Cn,Zn
-	void UpdateAverageWeightByThree(double w, int n, double _average_weights[], double _weights_numbers[]);
+	void UpdateAverageWeight(double w, int n);
 	//计算权重
 	double CalculateWeight(double w, int energy_increase);
 	//计算能量增量
 	int EnergyIncrease(point p, char type, point p_before, int n);
 	//更新临时参数
 	void UpdateTempVariables(double _average_weights[], double _weights_numbers[], point _configurations_point[], char _configurations_class[], double weight, int n, point p, char type, int energy_increase);
+	//计算当前构型能量值
+	int CalculatePresentConfigEnergy(point _configurations_point[], char _configurations_class[], int length);
 public:
 	//算法
 	void StartCalculate(string input);
+	//改进算法α
+	void StartCalculateImproveFirst(string input);
 };
 
