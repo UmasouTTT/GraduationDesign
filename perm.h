@@ -1,8 +1,5 @@
 #pragma once
 #include<stdlib.h>
-#include<map>
-#include<unordered_map>
-#include<vector>
 #include<math.h>
 #include<cmath>
 #include<string>
@@ -42,6 +39,7 @@ public:
 	static const int Z0;
 	static const int C;
 	static const float part_config_for_save;//初始迭代所保存构型比例
+	static const int target_lowest_energy;//目标最低构型
 
 private:
 	//当前最大分支标识号
@@ -64,9 +62,9 @@ private:
 	point *lowest_configurations_point;
 	char *lowest_configurations_class;
 	//用于获取合法组合集合
-	vector<int> input_numbers;
-	vector<int> combination_one;
-	vector<vector<int>> combination_result;
+
+	int **combinations_result;
+	point *choose_actions_3;
 	//最低能量构型数量
 	int num_of_lowestConfigurations;
 	//默认最差构型能量，由第一次随机遍历产生
@@ -78,7 +76,7 @@ private:
 	//记录目前最优构型数量
 	int best_config_num;
 	//生成初始权重
-	void InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, int _energy, point points[max_size_of_input], char _points[max_size_of_input]);
+	bool InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, int _energy, point points[max_size_of_input], char _points[max_size_of_input]);
 	//用于记录开始进行剪枝时的链长
 	int beginPuningTheBranch;
 	//用于判定是否已经开始剪枝
@@ -87,6 +85,10 @@ private:
 	bool isSolutionNeedToBeSaved;
 
 public:
+	//获取平均权重
+	void GetAverageWeight(double _average_weights[max_size_of_input]);
+	//获取长度为n的构型的数量
+	void GetWeightNumber(double _weights_numbers[max_size_of_input]);
 	//获取能量值
 	int GetEnergy() { return lowest_energy; }
 	//获取最低能量构型点坐标
@@ -139,7 +141,7 @@ private:
 	//计算合法的动作数
 	int LegalActions(point p, int n);
 	//重构计算合法动作函数，提高计算速率
-	int LegalActions(point p, vector<pair<int, point>> &legal_actions, int n);
+	int LegalActions(point p, point legal_actions_p[4], int legal_actions_t[4], int n);
 	//**************计算好度*************
 	double CalculateGoodResults(point p, char type, point p_before, int energy_increase, int n);
 	//**************计算权重*************
@@ -147,8 +149,8 @@ private:
 	//计算生长比例系数
 	double CalculatingLengthCoefficient(int n, int length);
 	//**************计算预计权重及各个动作的好度（避免重复计算）*************(由于内容较多，分两步进行)
-	double CalculatePredictWeightMid(double w, point p_before, char type, vector<double> &good_degrees, int k_free, const vector<pair<int, point>> &legal_actions, map<point, int> &energy_increase, int n);
-	double CalculatePredictWeight(double w, point p_before, char type, vector<double> &good_degrees, int n, int length, int k_free, const vector<pair<int, point>> &legal_actions, map<point, int> &energy_increase);
+	double CalculatePredictWeightMid(double w, point p_before, char type, double good_degrees[4], int k_free, point legal_actions_p[4], int legal_actions_t[4], int energy_increase[4], int n);
+	double CalculatePredictWeight(double w, point p_before, char type, double good_degrees[4], int n, int length, int k_free, point legal_actions_p[4], int legal_actions_t[4], int energy_increase[4]);
 	//*************更新Cn,Zn***************
 	void UpdateAverageWeight(double w, int n);
 	//***************计算上门限***********
@@ -159,15 +161,15 @@ private:
 	int  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase, point point_before[], char type_before[]);
 	int  UpdateGlobalVariables(double weight, int n, point p, int tag, char type, int energy_increase);
 	//**********************按照概率生成随机动作********************************
-	point GetNextActionByGoodDegrees(point p_before, vector<double> &good_degrees);
+	point GetNextActionByGoodDegrees(point p_before, double good_degrees[4]);
 	//递归计算排列组合
 	void CalculationCombinations(int offset, int k);
 	//获取可能组合数
-	vector<vector<int>>GetCombinations(vector<int> &legal_actions, int num);
+	void GetCombinations(int(&legal_actions)[4], int num, int num_of_legal_actions, int &num_of_result);
 	//根据数值获取相应的动作
-	vector<point> GetActionsByNum(vector<int> &numbers, point p_before);
+	void GetActionsByNum(int index, point p_before, int length_of_result);
 	//************按照好度概率随机选择动作集合*****************
-	vector<point> ChooseActionsGroupByGoodDegrees(int k, vector<double> &good_degrees, point p_before);
+    void ChooseActionsGroupByGoodDegrees(int k, double good_degrees[4], point p_before);
 	//测试运算结果是否正确
 	bool TestResultIsSatisfied(int target_energy, int length);	
 	//初始化（初始化变元，前两个值为定值,需要生成初始权重）
@@ -178,15 +180,24 @@ private:
 	void CalculateMaxSize(int length);
 	//初始化全局变元
 	void InitGlobalVariable(string input);
+	//获取动作序号
+	int GetActionsNum(point actions[4], point action);
 
 public:
 	//迭代算法
 	void StartCalculate(string input, int num_of_circle);
-	//迭代计算各分支情况
+	//迭代算法(只考虑权重)
+	void StartCalculateOnlyWeight(string input, int num_of_circle);
+	//迭代计算各分支情况（记录分支数量）
 	void CalculationProcess(int n, int whole_length, int tag, point p_before, double weight, string input);
+	//迭代计算各分支情况（不记录分支数量）
+	void CalculationProcessOnlyConsiderWeight(int n, int whole_length, int tag, point p_before, double weight, string input);
 	//多次计算各分支情况
-	void CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]);
-
+	void CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _average_weight[max_size_of_input], double _weight_number[max_size_of_input]);
+	//多次计算各分支情况(只考虑权重)
+	void CircleCalculateProcessOnlyConsiderWeight(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _average_weight[max_size_of_input], double _weight_number[max_size_of_input]);
+	//获取指定链长平均权重值
+	double GetAverageWeightWithLengthN(int n) { return average_weights[n-1]; }
 
 	//非算法部分功能
 private:

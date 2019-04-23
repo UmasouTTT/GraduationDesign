@@ -5,12 +5,14 @@ const int perm::max_size_of_input;
 const int perm::max_size_of_legal_input;
 const int perm::max_size_of_possibleConditions;
 
-const double perm::T = 0.35;
-const double perm::C0 = 100000;
+const double perm::T = 0.25;
+const double perm::C0 = 10000;
 const int perm::Z0 = 1;
 const int perm::C = 1;
 
 const float perm::part_config_for_save = 0.3;
+
+const int perm::target_lowest_energy = -48;//目标最低构型
 
 perm::perm()
 {
@@ -29,6 +31,12 @@ perm::perm()
 	isPuneBegin = true;
 	isSolutionNeedToBeSaved = true;
 	beginPuningTheBranch = max_size_of_input;
+
+	choose_actions_3 = new point[4];
+	combinations_result = new int*[6];
+	for (size_t i = 0; i < 6; i++) {
+		combinations_result[i] = new int[4];
+	}
 }
 
 perm::perm(int predict_energy) {
@@ -48,6 +56,12 @@ perm::perm(int predict_energy) {
 	isPuneBegin = true;
 	isSolutionNeedToBeSaved = true;
 	beginPuningTheBranch = max_size_of_input;
+
+	choose_actions_3 = new point[4];
+	combinations_result = new int*[6];
+	for (size_t i = 0; i < 6; i++) {
+		combinations_result[i] = new int[4];
+	}
 }
 
 perm::perm(int predict_energy, bool isSoultionSaved)
@@ -68,14 +82,17 @@ perm::perm(int predict_energy, bool isSoultionSaved)
 	isPuneBegin = true;
 	isSolutionNeedToBeSaved = isSoultionSaved;
 	beginPuningTheBranch = max_size_of_input;
+
+	choose_actions_3 = new point[4];
+	combinations_result = new int*[6];
+	for (size_t i = 0; i < 6; i++) {
+		combinations_result[i] = new int[4];
+	}
 }
 
 
 perm::~perm()
 {
-	input_numbers.clear();
-	combination_one.clear();
-	combination_result.clear();
 	for (size_t i = 0; i < max_size_of_input; i++){
 		delete[]best_config_ever[i];
 	}
@@ -86,6 +103,12 @@ perm::~perm()
 	delete configurations_class;
 	delete lowest_configurations_point;
 	delete lowest_configurations_class;
+
+	for (size_t i = 0; i < 6; i++) {
+		delete[]combinations_result[i];
+	}
+	delete combinations_result;
+	delete choose_actions_3;
 
 }
 
@@ -196,51 +219,58 @@ int perm::LegalActions(point p, int n) {
 	return result;
 }
 //重构计算合法动作函数，提高计算速率
-int perm::LegalActions(point p, vector<pair<int, point>> &legal_actions, int n) {
+int perm::LegalActions(point p, point legal_actions_p[4], int legal_actions_t[4], int n) {
 	int result = 0;
 	//n+1步为上端放置
 	point p1(p);
 	p1.y = p1.y + 1;
 	if (!IsThisPositionAlreadyOccupied(p1, n)) {
 		result += 1;
-		legal_actions.push_back(make_pair(1, p1));
+		legal_actions_p[0] = p1;
+		legal_actions_t[0] = 1;
 	}
 	else {
-		legal_actions.push_back(make_pair(0, p1));
+		legal_actions_p[0] = p1;
+		legal_actions_t[0] = 0;
 	}
 	//n+1步为右端放置
 	point p2(p);
 	p2.x = p2.x + 1;
 	if (!IsThisPositionAlreadyOccupied(p2, n)) {
 		result += 1;
-		legal_actions.push_back(make_pair(1, p2));
+		legal_actions_p[1] = p2;
+		legal_actions_t[1] = 1;
 	}
 	else {
-		legal_actions.push_back(make_pair(0, p2));
+		legal_actions_p[1] = p2;
+		legal_actions_t[1] = 0;
 	}
 	//n+1步为下端放置
 	point p3(p);
 	p3.y = p3.y - 1;
 	if (!IsThisPositionAlreadyOccupied(p3, n)) {
 		result += 1;
-		legal_actions.push_back(make_pair(1, p3));
+		legal_actions_p[2] = p3;
+		legal_actions_t[2] = 1;
 	}
 	else {
-		legal_actions.push_back(make_pair(0, p3));
+		legal_actions_p[2] = p3;
+		legal_actions_t[2] = 0;
 	}
 	//n+1步为左端放置
 	point p4(p);
 	p4.x = p4.x - 1;
 	if (!IsThisPositionAlreadyOccupied(p4, n)) {
 		result += 1;
-		legal_actions.push_back(make_pair(1, p4));
+		legal_actions_p[3] = p4;
+		legal_actions_t[3] = 1;
 	}
 	else {
-		legal_actions.push_back(make_pair(0, p4));
+		legal_actions_p[3] = p4;
+		legal_actions_t[3] = 0;
 	}
 	return result;
 }
-
 
 //**************计算好度*************
 double perm::CalculateGoodResults(point p, char type, point p_before, int energy_increase, int n) {
@@ -268,19 +298,20 @@ double perm::CalculatingLengthCoefficient(int n, int length) {
 }
 
 //**************计算预计权重及各个动作的好度（避免重复计算）*************(由于内容较多，分两步进行)
-double perm::CalculatePredictWeightMid(double w, point p_before, char type, vector<double> &good_degrees, int k_free, const vector<pair<int, point>> &legal_actions, map<point, int> &energy_increase, int n) {
+double perm::CalculatePredictWeightMid(double w, point p_before, char type, double good_degrees[4], int k_free, point legal_actions_p[4], int legal_actions_t[4], int energy_increase[4], int n) {
 	double result = 0;
 	int legal_action_numbers = 0;
-	for (size_t i = 0; i < legal_actions.size(); i++) {
-		point p = legal_actions[i].second;
-		if (legal_actions[i].first == 0) {
-			good_degrees.push_back(0);
+	for (size_t i = 0; i < 4; i++) {
+		point p = legal_actions_p[i];
+		if (legal_actions_t[i] == 0) {
+			good_degrees[i] = 0;
+			energy_increase[i] = 0;
 		}
 		else {
 			int e_increase = EnergyIncrease(p, type, p_before, n);
-			good_degrees.push_back(CalculateGoodResults(p, type, p_before, e_increase, n));
+			good_degrees[i] = CalculateGoodResults(p, type, p_before, e_increase, n);
 			result += e_increase;
-			energy_increase.insert(make_pair(p, e_increase));
+			energy_increase[i] = e_increase;
 			++legal_action_numbers;
 		}
 	}
@@ -292,8 +323,8 @@ double perm::CalculatePredictWeightMid(double w, point p_before, char type, vect
 	result = w * exp(-energy_increase_average / T);
 	return result;
 }
-double perm::CalculatePredictWeight(double w, point p_before, char type, vector<double> &good_degrees, int n, int length, int k_free, const vector<pair<int, point>> &legal_actions, map<point, int> &energy_increase) {
-	double temp_result = CalculatePredictWeightMid(w, p_before, type, good_degrees, k_free, legal_actions, energy_increase, n);
+double perm::CalculatePredictWeight(double w, point p_before, char type, double good_degrees[4], int n, int length, int k_free, point legal_actions_p[4], int legal_actions_t[4], int energy_increase[4]) {
+	double temp_result = CalculatePredictWeightMid(w, p_before, type, good_degrees, k_free, legal_actions_p, legal_actions_t, energy_increase, n);
 	temp_result *= CalculatingLengthCoefficient(n, length);
 	return temp_result;
 }
@@ -358,10 +389,10 @@ int  perm::UpdateGlobalVariables(double weight, int n, point p, int tag, char ty
 }
 
 //**********************按照概率生成随机动作********************************
-point perm::GetNextActionByGoodDegrees(point p_before, vector<double> &good_degrees) {
+point perm::GetNextActionByGoodDegrees(point p_before, double good_degrees[4]) {
 	double whole_good_degrees = 0;
 	double present_goodD_sum = good_degrees[0];
-	for (size_t i = 0; i < good_degrees.size(); i++) {
+	for (size_t i = 0; i < 4; i++) {
 		whole_good_degrees += good_degrees[i];
 	}
 	double result = random(0, whole_good_degrees);
@@ -383,7 +414,7 @@ point perm::GetNextActionByGoodDegrees(point p_before, vector<double> &good_degr
 }
 
 //递归计算排列组合
-void perm::CalculationCombinations(int offset, int k) {
+/*void perm::CalculationCombinations(int offset, int k) {
 	if (k == 0) {
 		combination_result.push_back(combination_one);
 		return;
@@ -394,66 +425,99 @@ void perm::CalculationCombinations(int offset, int k) {
 		CalculationCombinations(i + 1, k - 1);
 		combination_one.pop_back();//删除combination最后一个元素
 	}
-}
+}*/
 
 //获取可能组合数
-vector<vector<int>> perm::GetCombinations(vector<int> &legal_actions, int num) {
-	input_numbers.clear();
-	combination_one.clear();
-	combination_result.clear();
-	//初始化输入数据
-	for (size_t i = 0; i < legal_actions.size(); i++) {
-		input_numbers.push_back(legal_actions[i]);
-	}
+void perm::GetCombinations(int(&legal_actions)[4], int num, int num_of_legal_actions, int &num_of_result) {
+	num_of_result = 0;
 	//迭代计算组合数
-	CalculationCombinations(0, num);
-	return combination_result;
+	if (num == 1) {
+		for (size_t i = 0; i < num_of_legal_actions; i++) {
+			combinations_result[i][0] = legal_actions[i];
+			++num_of_result;
+		}
+	}
+	else if (num == 2) {
+		for (size_t i = 0; i < num_of_legal_actions; i++) {
+			for (size_t j = i + 1; j < num_of_legal_actions; j++) {
+				combinations_result[num_of_result][0] = legal_actions[i];
+				combinations_result[num_of_result][1] = legal_actions[j];
+				++num_of_result;
+			}
+		}
+	}
+	else if (num == 3) {
+		for (size_t i = 0; i < num_of_legal_actions; i++) {
+			for (size_t j = i + 1; j < num_of_legal_actions; j++) {
+				for (size_t k = j + 1; k < num_of_legal_actions; k++) {
+					combinations_result[num_of_result][0] = legal_actions[i];
+					combinations_result[num_of_result][1] = legal_actions[j];
+					combinations_result[num_of_result][2] = legal_actions[k];
+					++num_of_result;
+				}
+			}
+		}
+	}
+	else if (num == 4) {
+		combinations_result[0][0] = legal_actions[0];
+		combinations_result[0][1] = legal_actions[1];
+		combinations_result[0][2] = legal_actions[2];
+		combinations_result[0][3] = legal_actions[3];
+		num_of_result = 1;
+	}
+
+
+	//CalculationCombinations(0, num);
+	//return combination_result;
 }
 //根据数值获取相应的动作
-vector<point> perm::GetActionsByNum(vector<int> &numbers, point p_before) {
-	vector<point>result;
-	for (size_t i = 0; i < numbers.size(); i++) {
+void perm::GetActionsByNum(int index, point p_before, int length_of_result) {
+	for (size_t i = 0; i < length_of_result; i++) {
 		point temp_p(p_before);
-		if (numbers[i] == 0) {
+		if (combinations_result[index][i] == 0) {
 			temp_p.y = temp_p.y + 1;
 		}
-		else if (numbers[i] == 1) {
+		else if (combinations_result[index][i] == 1) {
 			temp_p.x = temp_p.x + 1;
 		}
-		else if (numbers[i] == 2) {
+		else if (combinations_result[index][i] == 2) {
 			temp_p.y = temp_p.y - 1;
 		}
-		else if (numbers[i] == 3) {
+		else if (combinations_result[index][i] == 3) {
 			temp_p.x = temp_p.x - 1;
 		}
-		result.push_back(temp_p);
+		choose_actions_3[i] = temp_p;
 	}
-	return result;
 }
 
 //************按照好度概率随机选择动作集合*****************
-vector<point> perm::ChooseActionsGroupByGoodDegrees(int k, vector<double> &good_degrees, point p_before) {
+void perm::ChooseActionsGroupByGoodDegrees(int k, double good_degrees[4], point p_before) {
 	//合法动作集合
-	vector<int>legal_actions;
-	for (size_t i = 0; i < good_degrees.size(); i++) {
+	int legal_actions[4];
+	int j = 0;
+	for (size_t i = 0; i < 4; i++) {
 		if (good_degrees[i] - 0.0 < judge_is_zero && good_degrees[i] - 0.0 > -judge_is_zero) {
 			continue;
 		}
-		legal_actions.push_back(i);
+		legal_actions[j] = i;
+		++j;
 	}
 	//计算可行组合数
-	vector<vector<int>>combination_actions = GetCombinations(legal_actions, k);
+	int num_of_result;
+	GetCombinations(legal_actions, k, j, num_of_result);
 	//计算好度总和
-	vector<pair<double, double>>combinations_sum_section;
+	double combinations_sum_section_1[6];
+	double combinations_sum_section_2[6];
 	//当前区间下限
 	double present_good_degrees_sum = 0;
-	for (size_t i = 0; i < combination_actions.size(); i++) {
+	for (size_t i = 0; i < num_of_result; i++) {
 		double temp_good_degree_sum = 0;
 		//计算该种组合的好度和
-		for (size_t j = 0; j < combination_actions[i].size(); j++) {
-			temp_good_degree_sum += good_degrees[combination_actions[i][j]];
+		for (size_t j = 0; j < k; j++) {
+			temp_good_degree_sum += good_degrees[combinations_result[i][j]];
 		}
-		combinations_sum_section.push_back(make_pair(present_good_degrees_sum, present_good_degrees_sum + temp_good_degree_sum));
+		combinations_sum_section_1[i] = present_good_degrees_sum;
+		combinations_sum_section_2[i] = present_good_degrees_sum + temp_good_degree_sum;
 		//更新区间下限
 		present_good_degrees_sum += temp_good_degree_sum;
 	}
@@ -461,14 +525,14 @@ vector<point> perm::ChooseActionsGroupByGoodDegrees(int k, vector<double> &good_
 	double random_result = random(0, present_good_degrees_sum);
 	//找到选取的集合
 	int choose_com;
-	for (size_t i = 0; i < combinations_sum_section.size(); i++) {
-		if (random_result >= combinations_sum_section[i].first && random_result <= combinations_sum_section[i].second) {
+	for (size_t i = 0; i < num_of_result; i++) {
+		if (random_result >= combinations_sum_section_1[i] && random_result <= combinations_sum_section_2[i]) {
 			choose_com = i;
 			break;
 		}
 	}
-	vector<point> choose_actions = GetActionsByNum(combination_actions[choose_com], p_before);
-	return choose_actions;
+
+	GetActionsByNum(choose_com, p_before, k);
 }
 //测试运算结果是否正确
 bool perm::TestResultIsSatisfied(int target_energy, int length) {
@@ -509,6 +573,16 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 			}			
 			ArrayAssignment(lowest_configurations_point, configurations_point, max_size_of_input);
 			ArrayAssignment(lowest_configurations_class, configurations_class, max_size_of_input);
+			if (present_energy == perm::target_lowest_energy) {
+				cout << "find target config!" << endl;
+				struct tm t;   //tm结构指针
+				time_t now;  //声明time_t类型变量
+				time(&now);      //获取系统日期和时间
+				localtime_s(&t, &now);   //获取当地日期和时间
+				string present_time = to_string(t.tm_hour) + 'h' + to_string(t.tm_min) + 'm' + to_string(t.tm_sec) + 's';
+				cout << present_time << endl;
+				cout << "end" << endl;
+			}
 		}
 		else if (present_energy == lowest_energy) {
 			if (present_energy <= worest_energy) {
@@ -521,19 +595,22 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 		}
 		return;
 	}
-	vector<pair<int, point>>legal_actions;
+	//vector<pair<int, point>>legal_actions;
+	point legal_actions_p[4];
+	int legal_actions_t[4];
 	point point_before[max_size_of_input];
 	char type_before[max_size_of_input];
-	int k_free = LegalActions(p_before, legal_actions, n);
+	int k_free = LegalActions(p_before, legal_actions_p, legal_actions_t, n);
 	if (k_free == 0) {
 		return;
 	}
 	//各个动作好度
-	vector<double>good_degrees;
+	double good_degrees[4];
 	//各个动作导致的能量增益
-	map<point, int>energy_increase;
+	//map<point, int>energy_increase;
+	int energy_increase[4];
 	//计算各个动作的好度与权重预测值
-	double predict_wigtht = CalculatePredictWeight(weight, p_before, input[n - 1], good_degrees, n, whole_length, k_free, legal_actions, energy_increase);
+	double predict_wigtht = CalculatePredictWeight(weight, p_before, input[n - 1], good_degrees, n, whole_length, k_free, legal_actions_p, legal_actions_t, energy_increase);
 	//计算上下门限
 	double upper_threshold;
 	double lower_threshold;
@@ -559,10 +636,12 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 		}
 		//根据好度概率选择下一动作
 		point next_action = GetNextActionByGoodDegrees(p_before, good_degrees);
+		//获取动作标号
+		int action_tag = GetActionsNum(legal_actions_p, next_action);
 		//计算做完该动作的权重
-		double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[next_action], p_before);
+		double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
 		//更新
-		UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[next_action]);
+		UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag]);
 		//进入分支
 		CalculationProcess(n + 1, whole_length, tag, next_action, present_weight, input);
 	}
@@ -580,10 +659,12 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 		else {
 			//根据好度概率选择下一动作
 			point next_action = GetNextActionByGoodDegrees(p_before, good_degrees);
+			//获取动作标号
+			int action_tag = GetActionsNum(legal_actions_p, next_action);
 			//计算做完该动作的权重
-			double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[next_action], p_before);
+			double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
 			//更新
-			UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[next_action]);
+			UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag]);
 			//进入分支
 			CalculationProcess(n + 1, whole_length, tag, next_action, present_weight, input);
 		}
@@ -592,29 +673,38 @@ void perm::CalculationProcess(int n, int whole_length, int tag, point p_before, 
 		//计算分支数量
 		int k = Min((double)k_free, (double)(predict_wigtht / upper_threshold));
 		//根据好度概率选择下一动作集合
-		vector<point>choose_actions = ChooseActionsGroupByGoodDegrees(k, good_degrees, p_before);
+		ChooseActionsGroupByGoodDegrees(k, good_degrees, p_before);
 		//记录更新前的值
 		int energy_before;
+		//记录合法动作集
+		point _choose_actions[4];
+		for (size_t i = 0; i < k; i++){
+			_choose_actions[i] = choose_actions_3[i];
+		}
 		//根据各动作生成新的分支
-		for (size_t i = 0; i < choose_actions.size(); i++) {
-			point next_action = choose_actions[i];
+		for (size_t i = 0; i < k; i++) {
+			point next_action = _choose_actions[i];
 			if (i == 0) {//无需新建分支
+						 //获取动作标号
+				int action_tag = GetActionsNum(legal_actions_p, next_action);
 						 //计算做完该动作的权重
-				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[next_action], p_before);
+				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
 				//更新
-				energy_before = UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[next_action], point_before, type_before);
+				energy_before = UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag], point_before, type_before);
 				//进入分支
 				CalculationProcess(n + 1, whole_length, tag, next_action, present_weight, input);
 			}
 			else {//新建分支
+				  //获取动作标号
+				int action_tag = GetActionsNum(legal_actions_p, next_action);
 				  //计算做完该动作的权重
-				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[next_action], p_before);
+				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
 				//建立新分支
 				present_energy = energy_before;
 				ArrayAssignment(configurations_point, point_before, n);
 				ArrayAssignment(configurations_class, type_before, n);
 				//更新
-				UpdateGlobalVariables(present_weight, n, next_action, max_tag, input[n - 1], energy_increase[next_action]);
+				UpdateGlobalVariables(present_weight, n, next_action, max_tag, input[n - 1], energy_increase[action_tag]);
 				//进入分支
 				CalculationProcess(n + 1, whole_length, max_tag, next_action, present_weight, input);
 			}
@@ -766,7 +856,7 @@ void perm::StartCalculate(string input, int num_of_circle) {
 
 
 //多次计算各分支情况
-void perm::CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, double _average_weights[max_size_of_input], int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _weights_numbers[max_size_of_input]){
+void perm::CircleCalculateProcess(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _average_weight[max_size_of_input], double _weight_number[max_size_of_input]) {
 	//初始化局部变量
 	int tag_i = 0;
 	int result_energy_low = 0;	
@@ -776,8 +866,9 @@ void perm::CircleCalculateProcess(int n, int whole_length, point p_before, doubl
 	while (tag_i < cirlce_times) {
 		//设置perm参数
 		if (tag_i == 0) {
-			InitStartAverageWeight(n, whole_length, p_before, weight, input, _energy, points, _points);
-		}		
+			SetAverageWeight(_average_weight);
+			SetThisWeightNumber(_weight_number);
+		}
 		//SetAverageWeight(_average_weights);
 		SetEnergy(_energy);
 		SetPointPosition(points);
@@ -787,7 +878,7 @@ void perm::CircleCalculateProcess(int n, int whole_length, point p_before, doubl
 		if (TestResultIsSatisfied(lowest_energy, input.length())) {
 			cout << "test satisfied!" << endl;
 		}
-		else {
+		else if(lowest_energy != 0){
 			cout << "something wrongQAQ~" << endl;
 		}
 		if (lowest_energy < result_energy_low) {
@@ -813,7 +904,7 @@ void perm::CircleCalculateProcess(int n, int whole_length, point p_before, doubl
 }
 
 //初始化起始权重
-void perm::InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, int _energy, point points[max_size_of_input], char _points[max_size_of_input]) {
+bool perm::InitStartAverageWeight(int n, int whole_length, point p_before, double weight, string input, int _energy, point points[max_size_of_input], char _points[max_size_of_input]) {
 	max_tag = 0;
 	weight = 1;
 	//权重算术平均值(第一次迭代时获取初始值需要初始化)
@@ -825,20 +916,32 @@ void perm::InitStartAverageWeight(int n, int whole_length, point p_before, doubl
 		weights_numbers[i] = 0;
 	}
 	//各分支具体构型
-	SetPointPosition(points);
-	SetPoint(_points);
+	point p1;
+	p1.x = 0;
+	p1.y = 0;
+	configurations_point[0] = p1;
+	configurations_class[0] = input[0];
+	p1.x = p1.x + 1;
+	p_before = p1;
+	configurations_point[1] = p1;
+	configurations_class[1] = input[1];
 	//各分支当前构型能量
-	SetEnergy(_energy);
+	present_energy = 0;
 	//初始化权重
-	CalculationProcess(n, input.length(), 0, p_before, weight, input);
+	CalculationProcess(3, input.length(), 0, p_before, weight, input);
 	if (TestResultIsSatisfied(lowest_energy, input.length())) {
 		cout << "finish start weight data!" << endl;
+	}
+	else if(lowest_energy == 0){
+		cout << "can not grow" << endl;
+		return false;
 	}
 	else {
 		cout << "something wrongQAQ~" << endl;
 	}
 	//重置其他数据
 	max_tag = 0;
+	return true;
 }
 
 
@@ -879,4 +982,247 @@ void perm::AddNewConfigToBestConfigEver(point points[max_size_of_input], int len
 		ArrayAssignment(best_config_ever[num_of_lowestConfigurations], points, length);
 		++num_of_lowestConfigurations;
 	}
+}
+
+
+//获取动作序号
+int perm::GetActionsNum(point actions[4], point action) {
+	for (size_t i = 0; i < 4; i++){
+		if ((actions[i].x == action.x) && (actions[i].y == action.y)) {
+			return i;
+		}
+	}
+	//错误
+	return -1;
+}
+
+void perm::GetAverageWeight(double _average_weights[max_size_of_input]) {
+	ArrayAssignment(_average_weights, average_weights, max_size_of_input);
+}
+
+void perm::GetWeightNumber(double _weights_numbers[max_size_of_input]) {
+	ArrayAssignment(_weights_numbers, weights_numbers, max_size_of_input);
+}
+
+
+
+
+//迭代计算各分支情况(只考虑均权重)
+void perm::CalculationProcessOnlyConsiderWeight(int n, int whole_length, int tag, point p_before, double weight, string input) {
+	//结束条件判断
+	if (n > whole_length) {
+		if (present_energy < lowest_energy) {
+			num_of_lowestConfigurations = 1;
+			//cout << "find lower energy configuration, present energy is:";
+			//cout << present_energy << endl;
+			lowest_energy = present_energy;
+			ArrayAssignment(lowest_configurations_point, configurations_point, max_size_of_input);
+			ArrayAssignment(lowest_configurations_class, configurations_class, max_size_of_input);
+			if (present_energy == perm::target_lowest_energy) {
+				cout << "find target config!" << endl;
+				struct tm t;   //tm结构指针
+				time_t now;  //声明time_t类型变量
+				time(&now);      //获取系统日期和时间
+				localtime_s(&t, &now);   //获取当地日期和时间
+				string present_time = to_string(t.tm_hour) + 'h' + to_string(t.tm_min) + 'm' + to_string(t.tm_sec) + 's';
+				cout << present_time << endl;
+				cout << "end" << endl;
+			}
+		}
+		else if (present_energy == lowest_energy) {
+			/*cout << "find new configuration :";
+			cout << num_of_lowestConfigurations;
+			cout << "  present energy is :";
+			cout << present_energy << endl;*/
+		}
+		return;
+	}
+	point legal_actions_p[4];
+	int legal_actions_t[4];
+	point point_before[max_size_of_input];
+	char type_before[max_size_of_input];
+	int k_free = LegalActions(p_before, legal_actions_p, legal_actions_t, n);
+	if (k_free == 0) {
+		return;
+	}
+	//各个动作好度
+	double good_degrees[4];
+	//各个动作导致的能量增益
+	//map<point, int>energy_increase;
+	int energy_increase[4];
+	//计算各个动作的好度与权重预测值
+	double predict_wigtht = CalculatePredictWeight(weight, p_before, input[n - 1], good_degrees, n, whole_length, k_free, legal_actions_p, legal_actions_t, energy_increase);
+	//计算上下门限
+	double upper_threshold;
+	double lower_threshold;
+	if (weights_numbers[n - 1] == 0) {
+		upper_threshold = predict_wigtht + 1;
+		lower_threshold = 0;
+	}
+	else {
+		upper_threshold = CalculateUpperThreshold(n);
+		lower_threshold = CalculateLowerThreshold(upper_threshold);
+	}
+	if (upper_threshold <= lower_threshold) {
+		int not_ok = 1;
+	}
+	//根据预测值与上下门限的数值关系分类讨论
+	if (predict_wigtht >= lower_threshold && predict_wigtht <= upper_threshold) {
+		//获取剪枝开始链长
+		if (!isPuneBegin && n < beginPuningTheBranch) {
+			beginPuningTheBranch = n;
+			choose_config_length = beginPuningTheBranch + 3;
+		}
+		//根据好度概率选择下一动作
+		point next_action = GetNextActionByGoodDegrees(p_before, good_degrees);
+		//获取动作标号
+		int action_tag = GetActionsNum(legal_actions_p, next_action);
+		//计算做完该动作的权重
+		double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
+		//更新
+		UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag]);
+		//进入分支
+		CalculationProcessOnlyConsiderWeight(n + 1, whole_length, tag, next_action, present_weight, input);
+	}
+	else if (predict_wigtht < lower_threshold) {
+		//获取剪枝开始链长
+		if (!isPuneBegin && n < beginPuningTheBranch) {
+			beginPuningTheBranch = n;
+			choose_config_length = beginPuningTheBranch + 3;
+		}
+		//按照1/2的概率丢弃该分支
+		double rand_result = random(0, 1);
+		if (rand_result < 0.5) {
+			return;
+		}
+		else {
+			//根据好度概率选择下一动作
+			point next_action = GetNextActionByGoodDegrees(p_before, good_degrees);
+			//获取动作标号
+			int action_tag = GetActionsNum(legal_actions_p, next_action);
+			//计算做完该动作的权重
+			double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
+			//更新
+			UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag]);
+			//进入分支
+			CalculationProcessOnlyConsiderWeight(n + 1, whole_length, tag, next_action, present_weight, input);
+		}
+	}
+	else {
+		//计算分支数量
+		int k = Min((double)k_free, (double)(predict_wigtht / upper_threshold));
+		//根据好度概率选择下一动作集合
+		ChooseActionsGroupByGoodDegrees(k, good_degrees, p_before);
+		//记录更新前的值
+		int energy_before;
+		//记录合法动作集
+		point _choose_actions[4];
+		for (size_t i = 0; i < k; i++) {
+			_choose_actions[i] = choose_actions_3[i];
+		}
+		//根据各动作生成新的分支
+		for (size_t i = 0; i < k; i++) {
+			point next_action = _choose_actions[i];
+			if (i == 0) {//无需新建分支
+						 //获取动作标号
+				int action_tag = GetActionsNum(legal_actions_p, next_action);
+				//计算做完该动作的权重
+				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
+				//更新
+				energy_before = UpdateGlobalVariables(present_weight, n, next_action, tag, input[n - 1], energy_increase[action_tag], point_before, type_before);
+				//进入分支
+				CalculationProcessOnlyConsiderWeight(n + 1, whole_length, tag, next_action, present_weight, input);
+			}
+			else {//新建分支
+				  //获取动作标号
+				int action_tag = GetActionsNum(legal_actions_p, next_action);
+				//计算做完该动作的权重
+				double present_weight = CalculateWeight(weight, next_action, input[n - 1], energy_increase[action_tag], p_before);
+				//建立新分支
+				present_energy = energy_before;
+				ArrayAssignment(configurations_point, point_before, n);
+				ArrayAssignment(configurations_class, type_before, n);
+				//更新
+				UpdateGlobalVariables(present_weight, n, next_action, max_tag, input[n - 1], energy_increase[action_tag]);
+				//进入分支
+				CalculationProcessOnlyConsiderWeight(n + 1, whole_length, max_tag, next_action, present_weight, input);
+			}
+		}
+	}
+}
+
+
+//多次计算各分支情况
+void perm::CircleCalculateProcessOnlyConsiderWeight(int n, int whole_length, point p_before, double weight, string input, int cirlce_times, int _energy, point points[max_size_of_input], char _points[max_size_of_input], double _average_weight[max_size_of_input], double _weight_number[max_size_of_input]) {
+	//初始化局部变量
+	int tag_i = 0;
+	int result_energy_low = 0;
+	int temp_lowestConfig = 0;
+	//循环体
+	while (tag_i < cirlce_times) {
+		//设置perm参数
+		if (tag_i == 0) {
+			SetAverageWeight(_average_weight);
+			SetThisWeightNumber(_weight_number);
+		}
+		SetEnergy(_energy);
+		SetPointPosition(points);
+		SetPoint(_points);
+		CalculationProcessOnlyConsiderWeight(n, input.length(), 0, p_before, weight, input);
+		if (TestResultIsSatisfied(lowest_energy, input.length())) {
+			//cout << "test satisfied!" << endl;
+		}
+		else if (lowest_energy != 0) {
+			cout << "something wrongQAQ~" << endl;
+		}
+		if (lowest_energy < result_energy_low) {
+			result_energy_low = lowest_energy;
+			//cout << "lowest energy: " << result_energy_low << "length of config : " << input.length() << endl;
+		}
+
+		//根据拟人策略将权重数设置为1
+		for (size_t i = 0; i < max_size_of_input; i++) {
+			weights_numbers[i] = 1;
+		}
+		++tag_i;
+	}
+	//num_of_lowestConfigurations = temp_lowestConfig;
+}
+
+
+
+
+void perm::StartCalculateOnlyWeight(string input, int num_of_circle) {
+	//初始化变元
+	int tag_i = 0;
+	point p_second;
+	double start_weigtht;
+	int result_energy_low = 0;
+	point point_before[max_size_of_input];
+	char type_before[max_size_of_input];
+	while (tag_i < num_of_circle) {
+		if (tag_i == 0) {
+			InitConfig(input, p_second, start_weigtht);
+		}
+		else {
+			InitConfigWithoutInitWeight(input, p_second, start_weigtht);
+		}
+		CalculationProcessOnlyConsiderWeight(3, input.length(), 0, p_second, start_weigtht, input);
+		if (TestResultIsSatisfied(lowest_energy, input.length())) {
+			cout << "test satisfied!" << endl;
+		}
+		else {
+			cout << "something wrongQAQ~" << endl;
+		}
+		if (lowest_energy < result_energy_low) {
+			result_energy_low = lowest_energy;
+			cout << "lowest energy: " << result_energy_low << "length of config : " << input.length() << endl;
+		}
+		//根据拟人策略将权重数设置为1
+		for (size_t i = 0; i < max_size_of_input; i++) {
+			weights_numbers[i] = 1;
+		}
+		++tag_i;
+	}
+	//num_of_lowestConfigurations = temp_lowestConfig;
 }
